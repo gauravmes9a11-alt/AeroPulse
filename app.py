@@ -48,81 +48,185 @@ hal_b64 = get_base64_image("assets/hal_logo.png")
 
 # ---------------------------------------------------------------------------
 # Sidebar toggle button & top header with HAL logo
+#
+# FIX: The old version injected the toggle button *inside* the sidebar
+# section itself. Streamlit removes/hides that whole <section> when the
+# sidebar is collapsed, which also removed the button used to reopen it —
+# leaving a dead, invisible spot in the top-left corner.
+#
+# This version instead attaches a FIXED, always-visible toggle button to
+# document.body (outside the sidebar DOM entirely), so it survives both
+# the expanded and collapsed states. It also force-restyles Streamlit's
+# native collapsed-sidebar arrow so it can never be hidden by dark-on-dark
+# CSS from inject_css().
 # ---------------------------------------------------------------------------
 components.html(
     f"""
     <script>
     const doc = window.parent.document;
 
+    function clickNativeToggle() {{
+        const selectors = [
+            '[data-testid="stSidebarCollapseButton"] button',
+            '[data-testid="stSidebarCollapsedControl"] button',
+            '[data-testid="stSidebarCollapseButton"]',
+            '[data-testid="stSidebarCollapsedControl"]',
+        ];
+        for (const sel of selectors) {{
+            const el = doc.querySelector(sel);
+            if (el) {{ el.click(); return; }}
+        }}
+        // Fallback for Streamlit versions with different test ids: find any
+        // button whose aria-label mentions "sidebar".
+        const btns = doc.querySelectorAll('button');
+        for (const b of btns) {{
+            const label = (b.getAttribute('aria-label') || '').toLowerCase();
+            if (label.includes('sidebar')) {{ b.click(); return; }}
+        }}
+    }}
+
+    // A sidebar `<section>` stays in the DOM even when collapsed (it just
+    // shrinks to zero width) — so we can't rely on it being missing. Check
+    // aria-expanded first, and fall back to measuring actual width.
+    function isSidebarCollapsed() {{
+        const sidebar = doc.querySelector('section[data-testid="stSidebar"]');
+        if (!sidebar) return true;
+        const ariaExpanded = sidebar.getAttribute('aria-expanded');
+        if (ariaExpanded !== null) return ariaExpanded === 'false';
+        const rect = sidebar.getBoundingClientRect();
+        return rect.width < 5;
+    }}
+
     function initSidebarHeader() {{
         const sidebar = doc.querySelector('section[data-testid="stSidebar"]');
-        if (!sidebar) return;
 
-        let header = doc.getElementById('custom-sidebar-header');
-        if (!header) {{
-            header = doc.createElement('div');
-            header.id = 'custom-sidebar-header';
-            header.style.cssText = `
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                padding: 0.6rem 0.85rem;
-                border-bottom: 1px solid var(--dash-border, #1e375c);
-                background: linear-gradient(135deg, #060d19 0%, #142542 100%);
-                margin-bottom: 0rem;
-            `;
-            header.innerHTML = `
-                <button id="custom-sidebar-toggle" title="Toggle sidebar" style="
-                    width: 36px;
-                    height: 36px;
-                    border-radius: 6px;
-                    background: var(--dash-panel-2, #1e2530);
-                    border: 1px solid var(--dash-border, #333);
-                    color: var(--dash-text, #fff);
-                    cursor: pointer;
-                    font-size: 16px;
-                    line-height: 1;
+        // --- 1. Header inside the sidebar (only exists while expanded) ---
+        if (sidebar) {{
+            let header = doc.getElementById('custom-sidebar-header');
+            if (!header) {{
+                header = doc.createElement('div');
+                header.id = 'custom-sidebar-header';
+                header.style.cssText = `
                     display: flex;
                     align-items: center;
-                    justify-content: center;
-                    flex-shrink: 0;
-                ">&#9776;</button>
-                <div style="background: #ffffff; padding: 3px; border-radius: 6px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">
-                    <img src="data:image/png;base64,{hal_b64}" style="max-width: 100%; max-height: 100%; object-fit: contain;">
-                </div>
-                <div>
-                    <div style="font-weight: 700; font-size: 0.92rem; color: #f1f5f9; line-height: 1.1; letter-spacing: -0.01em;">HAL Aerothon</div>
-                    <div style="font-size: 0.68rem; color: #8ea3c2; font-weight: 500; margin-top: 2px;">UAV Propulsion Sizing</div>
-                </div>
-            `;
-            sidebar.insertBefore(header, sidebar.firstChild);
+                    gap: 10px;
+                    padding: 0.6rem 0.85rem;
+                    border-bottom: 1px solid var(--dash-border, #1e375c);
+                    background: linear-gradient(135deg, #060d19 0%, #142542 100%);
+                    margin-bottom: 0rem;
+                `;
+                header.innerHTML = `
+                    <button id="custom-sidebar-toggle" title="Toggle sidebar" style="
+                        width: 36px;
+                        height: 36px;
+                        border-radius: 6px;
+                        background: var(--dash-panel-2, #1e2530);
+                        border: 1px solid var(--dash-border, #333);
+                        color: var(--dash-text, #fff);
+                        cursor: pointer;
+                        font-size: 16px;
+                        line-height: 1;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        flex-shrink: 0;
+                    ">&#9776;</button>
+                    <div style="background: #ffffff; padding: 3px; border-radius: 6px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">
+                        <img src="data:image/png;base64,{hal_b64}" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+                    </div>
+                    <div>
+                        <div style="font-weight: 700; font-size: 0.92rem; color: #f1f5f9; line-height: 1.1; letter-spacing: -0.01em;">HAL Aerothon</div>
+                        <div style="font-size: 0.68rem; color: #8ea3c2; font-weight: 500; margin-top: 2px;">UAV Propulsion Sizing</div>
+                    </div>
+                `;
+                sidebar.insertBefore(header, sidebar.firstChild);
 
-            const btn = doc.getElementById('custom-sidebar-toggle');
-            if (btn) {{
-                btn.addEventListener('mouseenter', function () {{
-                    btn.style.background = 'var(--dash-primary, #3b82f6)';
-                    btn.style.borderColor = 'var(--dash-primary, #3b82f6)';
-                }});
-                btn.addEventListener('mouseleave', function () {{
-                    btn.style.background = 'var(--dash-panel-2, #1e2530)';
-                    btn.style.borderColor = 'var(--dash-border, #333)';
-                }});
-                btn.addEventListener('click', function () {{
-                    const native =
-                        doc.querySelector('[data-testid="stSidebarCollapseButton"] button') ||
-                        doc.querySelector('[data-testid="stSidebarCollapsedControl"] button') ||
-                        doc.querySelector('[data-testid="stSidebarCollapseButton"]') ||
-                        doc.querySelector('[data-testid="stSidebarCollapsedControl"]');
-                    if (native) native.click();
-                }});
+                const btn = doc.getElementById('custom-sidebar-toggle');
+                if (btn) {{
+                    btn.addEventListener('mouseenter', function () {{
+                        btn.style.background = 'var(--dash-primary, #3b82f6)';
+                        btn.style.borderColor = 'var(--dash-primary, #3b82f6)';
+                    }});
+                    btn.addEventListener('mouseleave', function () {{
+                        btn.style.background = 'var(--dash-panel-2, #1e2530)';
+                        btn.style.borderColor = 'var(--dash-border, #333)';
+                    }});
+                    btn.addEventListener('click', clickNativeToggle);
+                }}
             }}
+        }}
+
+        // --- 2. ALWAYS-VISIBLE floating toggle, lives outside the sidebar ---
+        let floatBtn = doc.getElementById('float-sidebar-toggle');
+        if (!floatBtn) {{
+            floatBtn = doc.createElement('button');
+            floatBtn.id = 'float-sidebar-toggle';
+            floatBtn.title = 'Toggle sidebar';
+            floatBtn.innerHTML = '&#9776;';
+            floatBtn.style.cssText = `
+                position: fixed;
+                top: 12px;
+                left: 12px;
+                width: 38px;
+                height: 38px;
+                border-radius: 6px;
+                background: #1e2530;
+                border: 1px solid #3b4a6b;
+                color: #ffffff;
+                cursor: pointer;
+                font-size: 16px;
+                line-height: 1;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 999999;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+            `;
+            floatBtn.addEventListener('mouseenter', function () {{
+                floatBtn.style.background = '#3b82f6';
+                floatBtn.style.borderColor = '#3b82f6';
+            }});
+            floatBtn.addEventListener('mouseleave', function () {{
+                floatBtn.style.background = '#1e2530';
+                floatBtn.style.borderColor = '#3b4a6b';
+            }});
+            floatBtn.addEventListener('click', clickNativeToggle);
+            doc.body.appendChild(floatBtn);
+        }}
+
+        // Hide the floating button while the sidebar is open (custom header
+        // already provides a toggle there); show it whenever collapsed.
+        floatBtn.style.display = isSidebarCollapsed() ? 'flex' : 'none';
+
+        // --- 3. Force Streamlit's own native collapsed-control to stay visible
+        // in case something in inject_css() is hiding it (dark-on-dark, etc). ---
+        const nativeCtrl =
+            doc.querySelector('[data-testid="stSidebarCollapsedControl"]') ||
+            doc.querySelector('[data-testid="stSidebarCollapseButton"]');
+        if (nativeCtrl) {{
+            nativeCtrl.style.opacity = '1';
+            nativeCtrl.style.visibility = 'visible';
+            nativeCtrl.style.zIndex = '999998';
         }}
     }}
 
     initSidebarHeader();
 
     const observer = new MutationObserver(initSidebarHeader);
-    observer.observe(doc.body, {{ childList: true, subtree: true }});
+    observer.observe(doc.body, {{
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['style', 'aria-expanded', 'class'],
+    }});
+
+    // Belt-and-braces: also re-check right after any click anywhere, since
+    // Streamlit's collapse animation can finish a frame or two after the
+    // click event, outside the mutation observer's immediate callback.
+    doc.addEventListener('click', function () {{
+        setTimeout(initSidebarHeader, 50);
+        setTimeout(initSidebarHeader, 300);
+    }});
     </script>
     """,
     height=0,
@@ -139,6 +243,19 @@ st.markdown(
 
     section[data-testid="stSidebar"] * {
         color: var(--dash-text);
+    }
+
+    /* Safety net: never let the native collapsed-sidebar arrow be
+       invisible due to color inheritance from inject_css(). */
+    [data-testid="stSidebarCollapsedControl"],
+    [data-testid="stSidebarCollapseButton"] {
+        opacity: 1 !important;
+        visibility: visible !important;
+    }
+    [data-testid="stSidebarCollapsedControl"] svg,
+    [data-testid="stSidebarCollapseButton"] svg {
+        fill: #ffffff !important;
+        color: #ffffff !important;
     }
     </style>
     """,
