@@ -8,6 +8,10 @@ The code is intentionally modular: `models.py` contains replaceable subsystem cu
 
 It also includes a professional Streamlit dashboard for interactive mission simulation, timeline visualization, Pareto exploration, sensitivity review, and design-summary export.
 
+For live simulation of this Series Hybrid-Electric UAV Propulsion Architecture use the below link:
+
+(Aeropulse-simulation(https://aero-pulse-simulation.vercel.app/)
+
 ## Install
 
 ```bash
